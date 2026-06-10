@@ -285,6 +285,23 @@
     border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-weight: 600;
   }
 
+  /* 사용완료 버튼 */
+  .btn-finish {
+    width: 100%;
+    padding: 15px;
+    background: #a32d2d;
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: background .15s;
+  }
+  .btn-finish:hover { background: #7a1a1a; }
+  .btn-finish:disabled { background: #b4b2a9; cursor: not-allowed; }
+
   /* 장비 상태 배너 */
   .status-banner {
     display: none;
@@ -385,30 +402,37 @@
       </div>
     </div>
 
-    <div class="status-row">
-      <div class="field" style="margin-bottom:0">
-        <label>사용 전 상태 *</label>
-        <div class="radio-group">
-          <label><input type="radio" name="before" value="정상"><span>✓ 정상</span></label>
-          <label><input type="radio" name="before" value="이상"><span>✗ 이상</span></label>
-        </div>
-      </div>
-      <div class="field" style="margin-bottom:0">
-        <label>사용 후 상태 *</label>
-        <div class="radio-group">
-          <label><input type="radio" name="after" value="정상"><span>✓ 정상</span></label>
-          <label><input type="radio" name="after" value="이상"><span>✗ 이상</span></label>
-        </div>
+    <div class="field" style="margin-bottom:1rem;">
+      <label>사용 전 상태 *</label>
+      <div class="radio-group">
+        <label><input type="radio" name="before" value="정상"><span>✓ 정상</span></label>
+        <label><input type="radio" name="before" value="이상"><span>✗ 이상</span></label>
       </div>
     </div>
 
-    <div class="field-note" style="margin-top:1rem; margin-bottom:1rem;">
+    <button class="btn-submit" id="btn-submit" onclick="startUse()">사용 시작</button>
+  </div><!-- /form-card -->
+
+  <!-- 사용 중 카드: 시작 후 표시 -->
+  <div id="using-card" class="card" style="display:none;">
+    <div style="text-align:center; margin-bottom:14px;">
+      <div style="font-size:28px; margin-bottom:6px;">⏱</div>
+      <div id="using-title" style="font-size:15px; font-weight:700; color:#0a5040; margin-bottom:4px;"></div>
+      <div id="using-since" style="font-size:12px; color:#888780;"></div>
+    </div>
+    <div class="field" style="margin-bottom:0.75rem;">
+      <label>사용 후 상태 *</label>
+      <div class="radio-group">
+        <label><input type="radio" name="after" value="정상"><span>✓ 정상</span></label>
+        <label><input type="radio" name="after" value="이상"><span>✗ 이상</span></label>
+      </div>
+    </div>
+    <div class="field-note" style="margin-bottom:0.75rem;">
       <label style="display:block;font-size:12px;font-weight:600;color:#5f5e5a;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px;">특이사항 (선택)</label>
       <textarea id="note" placeholder="이상 증상, 요청사항 등 (선택)"></textarea>
     </div>
-
-    <button class="btn-submit" id="btn-submit" onclick="submitLog()">기록 저장</button>
-  </div><!-- /form-card -->
+    <button class="btn-finish" id="btn-finish" onclick="finishUse()">■ 사용 종료 및 저장</button>
+  </div>
 </div>
 
 <!-- 로그 조회 탭 -->
@@ -682,8 +706,53 @@ function populateSelects(equipment, users) {
   });
 }
 
-// ── 로그 저장 ────────────────────────────────────────────
-function submitLog() {
+// ── 사용 시작 ────────────────────────────────────────────
+// 사용자 선택 + 사용 전 상태 확인 → STATUS 등록 → 사용중 화면 전환
+function startUse() {
+  const equipment = autoEq || document.getElementById("equipment").value;
+  const user      = document.getElementById("user").value;
+  const before    = document.querySelector('input[name="before"]:checked')?.value;
+
+  if (!equipment || !user || !before) {
+    showToast("write", "err", "장비명, 사용자, 사용 전 상태를 선택해 주세요.");
+    return;
+  }
+
+  const startTime = document.getElementById("start-time").value || nowStr();
+  const btn = document.getElementById("btn-submit");
+  btn.disabled = true;
+  btn.textContent = "등록 중...";
+
+  // STATUS 시트에 사용 중 등록
+  const url = getScriptUrl();
+  const doRegister = () => {
+    // 사용중 카드로 전환
+    document.getElementById("form-card").style.display = "none";
+    document.getElementById("using-card").style.display = "block";
+    document.getElementById("status-banner").style.display = "none";
+    document.getElementById("using-title").textContent = `${equipment} 사용 중`;
+    document.getElementById("using-since").textContent = `${user} · ${startTime} 시작`;
+    btn.disabled = false;
+    btn.textContent = "사용 시작";
+  };
+
+  if (url) {
+    fetch(url, {
+      method: "POST", redirect: "follow",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ action: "setstatus", equipment, user, startTime })
+    })
+    .then(() => doRegister())
+    .catch(() => doRegister())  // 실패해도 UI는 전환
+    .finally(() => { btn.disabled = false; btn.textContent = "사용 시작"; });
+  } else {
+    doRegister();
+  }
+}
+
+// ── 사용 종료 ─────────────────────────────────────────────
+// 사용 후 상태 + 특이사항 입력 → LOG 저장 → STATUS 해제
+function finishUse() {
   const equipment = autoEq || document.getElementById("equipment").value;
   const user      = document.getElementById("user").value;
   const before    = document.querySelector('input[name="before"]:checked')?.value;
@@ -692,62 +761,62 @@ function submitLog() {
   const startTime = document.getElementById("start-time").value || nowStr();
   const endTime   = nowStr();
 
-  if (!equipment || !user || !before || !after) {
-    showToast("write", "err", "장비명, 사용자, 상태를 모두 선택해 주세요.");
+  if (!after) {
+    showToast("write", "err", "사용 후 상태를 선택해 주세요.");
     return;
   }
 
   const payload = { action: "addlog", equipment, user, startTime, endTime, before, after, note };
-
-  // 사용 시작 시 STATUS 시트에 등록 (QR 모드)
-  if (autoEq) registerStatus(equipment, user, startTime);
-
   const url = getScriptUrl();
-  const btn = document.getElementById("btn-submit");
+  const btn = document.getElementById("btn-finish");
   btn.disabled = true;
   btn.textContent = "저장 중...";
 
+  const doFinish = () => {
+    saveLocalLog(payload);
+    // STATUS 해제
+    if (url) {
+      fetch(url, {
+        method: "POST", redirect: "follow",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: "clearstatus", equipment })
+      }).catch(() => {});
+    }
+    onSuccess();
+  };
+
   if (url) {
     fetch(url, {
-      method: "POST",
-      redirect: "follow",
+      method: "POST", redirect: "follow",
       headers: { "Content-Type": "text/plain" },
       body: JSON.stringify(payload)
     })
     .then(r => r.json())
     .then(data => {
-      if (data.status === "ok") {
-        saveLocalLog(payload);
-        // STATUS 시트에서 해당 장비 사용 중 해제
-        fetch(url, {
-          method: "POST", redirect: "follow",
-          headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify({ action: "clearstatus", equipment: payload.equipment })
-        }).catch(() => {});
-        onSuccess();
-      } else {
-        showToast("write", "err", "저장 실패: " + data.message);
-      }
+      if (data.status === "ok") { doFinish(); }
+      else showToast("write", "err", "저장 실패: " + data.message);
     })
-    .catch(() => { saveLocalLog(payload); onSuccess("오프라인 저장됨"); })
-    .finally(() => { btn.disabled = false; btn.textContent = "기록 저장"; });
+    .catch(() => doFinish())
+    .finally(() => { btn.disabled = false; btn.textContent = "■ 사용 종료 및 저장"; });
   } else {
-    saveLocalLog(payload);
-    onSuccess("로컬 저장됨 (Sheets 미연동)");
+    doFinish();
     btn.disabled = false;
-    btn.textContent = "기록 저장";
+    btn.textContent = "■ 사용 종료 및 저장";
   }
 }
 
 function onSuccess(msg) {
   showToast("write", "ok", msg || "✓ 기록이 저장되었습니다.");
+  // 폼 초기화
   document.getElementById("user").value = "";
   document.getElementById("note").value = "";
   if (!autoEq) document.getElementById("equipment").value = "";
   document.querySelectorAll('input[name="before"], input[name="after"]').forEach(r => r.checked = false);
   setStartTime();
   document.getElementById("end-time-display").textContent = "저장 시 자동기록";
-  // QR 모드: 저장 후 상태 배너를 사용 가능으로 복원
+  // 사용중 카드 숨기고 폼 + 배너 복원
+  document.getElementById("using-card").style.display = "none";
+  document.getElementById("form-card").style.display = "block";
   if (autoEq) showAvailable();
 }
 
