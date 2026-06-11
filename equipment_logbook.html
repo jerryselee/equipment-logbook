@@ -621,6 +621,11 @@ function checkEquipmentStatus(eqName) {
   .then(r => r.json())
   .then(data => {
     if (data.status === "ok" && data.inUse) {
+      // 사용자 선택 드롭다운은 보이게 (본인 확인용), 시작 버튼만 비활성
+      document.getElementById("form-card").style.display = "block";
+      document.getElementById("btn-submit").disabled = true;
+      document.getElementById("btn-submit").textContent = "사용 중 - 시작 불가";
+      document.getElementById("btn-submit").style.background = "#b4b2a9";
       showInUse(data.user, data.startTime);
     } else {
       showAvailable();
@@ -647,9 +652,40 @@ function showInUse(user, startTime) {
   document.getElementById("sb-icon").textContent  = "🚫";
   document.getElementById("sb-title").textContent = "사용 중";
   document.getElementById("sb-sub").innerHTML =
-    `<b>${user}</b> 사용 중<br>${startTime} 부터`;
+    `<b>${user}</b> 사용 중<br>${startTime} 부터
+    <br><br>
+    <button onclick="claimAndFinish('${user}', '${startTime}')"
+      style="margin-top:4px;padding:10px 20px;background:#a32d2d;color:#fff;
+             border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+      내가 사용 중입니다 (종료하기)
+    </button>`;
   // 폼 숨김
   document.getElementById("form-card").style.display = "none";
+}
+
+// ── 본인 확인 후 강제 종료 ───────────────────────────────
+function claimAndFinish(inUseUser, startTime) {
+  // 사용자 드롭다운에서 선택된 이름 확인
+  const selectedUser = document.getElementById("user").value;
+  if (!selectedUser) {
+    alert("먼저 위의 사용자 목록에서 본인 이름을 선택해 주세요.");
+    document.getElementById("form-card").style.display = "block";
+    return;
+  }
+  if (selectedUser !== inUseUser) {
+    alert(`사용자가 일치하지 않습니다.
+현재 사용자: ${inUseUser}
+선택한 사용자: ${selectedUser}`);
+    return;
+  }
+  // 본인 확인 → 종료 카드로 전환
+  document.getElementById("status-banner").style.display = "none";
+  document.getElementById("form-card").style.display = "none";
+  document.getElementById("using-card").style.display = "block";
+  document.getElementById("using-title").textContent = `${autoEq} 사용 중`;
+  document.getElementById("using-since").textContent = `${selectedUser} · ${startTime} 시작`;
+  // start-time 복원 (종료 시 기록용)
+  document.getElementById("start-time").value = startTime;
 }
 
 // ── 탭 전환 ─────────────────────────────────────────────
